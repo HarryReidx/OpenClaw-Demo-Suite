@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import uvicorn
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,10 +28,18 @@ from shared.config import get_settings
 from shared.db_skill import (
     DEFAULT_SKILL_ID,
     DEFAULT_SKILL_NAME,
+    connection_summary,
+    extract_connection_details,
     install_database_skill,
     list_tables as db_skill_list_tables,
     run_readonly_query as db_skill_run_readonly_query,
+    select_installable_skill,
     smoke_test_database_skill,
+)
+from shared.skill_registry import (
+    install_skill_from_github,
+    parse_github_install_spec,
+    run_optional_smoke_test,
 )
 from shared.db import delete_messages, load_messages, save_message
 from shared.news import push_ai_digest_to_wechat, refresh_ai_digest
@@ -40,6 +49,7 @@ from shared.rag import (
     add_document,
     delete_document,
     extract_text_from_file,
+    get_document,
     list_documents,
     search_chunks,
 )
@@ -170,6 +180,8 @@ def _task_payload(task: dict) -> dict[str, object]:
         "task_id": task["task_id"],
         "task_type": task.get("task_type", ""),
         "prompt_text": task.get("prompt_text", ""),
+        "action_prompt": task.get("action_prompt", ""),
+        "schedule_mode": task.get("schedule_mode", ""),
         "status": task.get("status", "pending"),
         "created_at": task.get("created_at"),
         "run_at": task.get("run_at"),
@@ -216,8 +228,8 @@ def _skill_catalog() -> list[dict[str, str]]:
         },
         {
             "id": "schedule_push",
-            "name": "定时推送",
-            "description": "支持创建 AI 早报定时任务，并追踪执行状态。",
+            "name": "定时任务",
+            "description": "支持创建通用定时任务，并追踪执行状态，例如新闻、网页操作、天气提醒等。",
         },
         {
             "id": "chat_memory",
@@ -306,6 +318,18 @@ def _remove_session_tasks(session_id: str) -> None:
 
 def _schedule_task(task: dict) -> None:
     scheduler = ensure_scheduler_started()
+    if task.get("schedule_mode") == "daily":
+        job = scheduler.add_job(
+            _execute_scheduled_task,
+            trigger=CronTrigger(hour=int(task.get("hour", 9)), minute=int(task.get("minute", 0))),
+            id=task["task_id"],
+            replace_existing=True,
+            args=[task["task_id"]],
+        )
+        if job and job.next_run_time:
+            _update_task(task["task_id"], run_at=job.next_run_time.isoformat())
+        return
+
     run_at = datetime.fromisoformat(task["run_at"])
     scheduler.add_job(
         _execute_scheduled_task,
@@ -323,6 +347,9 @@ def _restore_pending_tasks() -> None:
             _start_skill_install_task(task["task_id"])
             continue
         if task.get("status") != "pending":
+            continue
+        if task.get("task_type") == "scheduled_action" and task.get("schedule_mode") == "daily":
+            _schedule_task(task)
             continue
         run_at = datetime.fromisoformat(task["run_at"])
         if run_at <= now:
@@ -350,13 +377,61 @@ def _create_news_task(session_id: str, delay_seconds: int, prompt_text: str) -> 
     return task
 
 
-def _create_skill_install_task(session_id: str, prompt_text: str, skill_id: str, skill_name: str) -> dict:
+def _create_scheduled_action_task(
+    session_id: str,
+    prompt_text: str,
+    action_prompt: str,
+    *,
+    delay_seconds: int | None = None,
+    schedule_mode: str = "once",
+    hour: int | None = None,
+    minute: int | None = None,
+) -> dict:
+    run_at = datetime.now() + timedelta(seconds=delay_seconds or 0)
+    if schedule_mode == "daily":
+        now = datetime.now()
+        target = now.replace(hour=hour or 9, minute=minute or 0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        run_at = target
+
+    task = {
+        "task_id": uuid4().hex,
+        "session_id": session_id,
+        "task_type": "scheduled_action",
+        "prompt_text": prompt_text,
+        "action_prompt": action_prompt,
+        "schedule_mode": schedule_mode,
+        "delay_seconds": delay_seconds,
+        "hour": hour,
+        "minute": minute,
+        "run_at": run_at.isoformat(),
+        "status": "pending",
+        "created_at": datetime.now().isoformat(),
+    }
+    tasks = _load_tasks()
+    tasks.append(task)
+    _save_tasks(tasks)
+    _schedule_task(task)
+    return task
+
+
+def _create_skill_install_task(
+    session_id: str,
+    prompt_text: str,
+    skill_id: str,
+    skill_name: str,
+    install_source: str = "catalog",
+    install_spec: dict[str, object] | None = None,
+) -> dict:
     task = {
         "task_id": uuid4().hex,
         "session_id": session_id,
         "task_type": "skill_install",
         "skill_id": skill_id,
         "skill_name": skill_name,
+        "install_source": install_source,
+        "install_spec": install_spec or {},
         "prompt_text": prompt_text,
         "status": "pending",
         "created_at": datetime.now().isoformat(),
@@ -378,31 +453,54 @@ def _execute_scheduled_task(task_id: str) -> None:
     if not task or task.get("status") != "pending":
         return
 
+    action_prompt = str(task.get("action_prompt") or task.get("prompt_text") or "").strip()
     steps = [
-        _step("\u8bfb\u53d6\u4efb\u52a1", "done", "\u5df2\u52a0\u8f7d\u7528\u6237\u7684\u5b9a\u65f6\u9700\u6c42"),
-        _step("\u8c03\u7528\u5b9a\u65f6\u63a8\u9001", "done", "\u5df2\u5524\u8d77\u8c03\u5ea6\u4efb\u52a1\u5e76\u7b49\u5f85\u89e6\u53d1"),
-        _step("\u6574\u7406\u8d44\u8baf", "done", "\u5df2\u51c6\u5907\u6700\u65b0 AI \u65e9\u62a5"),
+        _step("读取任务", "done", "已加载用户的定时需求"),
+        _step("触发定时执行", "done", "已唤起调度任务并开始执行"),
+        _step("执行动作", "running", action_prompt or "已读取待执行内容"),
     ]
     _update_task(task_id, status="running", started_at=datetime.now().isoformat())
     try:
-        digest = refresh_ai_digest(fetch_timeout=8.0)
-        push_result = push_ai_digest_to_wechat()
-        steps.append(_step("\u63a8\u9001\u4f01\u4e1a\u5fae\u4fe1", "done", push_result["status"]))
-        content = f"{digest}\n\n\u63a8\u9001\u72b6\u6001\uff1a{push_result['status']}"
-        status = "done"
+        non_stream_result = _generate_non_stream_response(
+            session_id=task["session_id"],
+            prompt_text=action_prompt,
+            image_bytes=None,
+            image_content_type="image/jpeg",
+            metadata={},
+            allow_scheduling=False,
+        )
+        if non_stream_result is not None:
+            action_answer, action_meta = non_stream_result
+        else:
+            conversation, history_items, rag_context = _build_chat_conversation(task["session_id"], action_prompt)
+            action_meta = _build_chat_assistant_meta(action_prompt, history_items, rag_context)
+            response = chat_completion(conversation, temperature=0.45)
+            action_answer = response.choices[0].message.content or ""
+        steps[2] = _step("执行动作", "done", action_prompt or "已完成执行")
+        content = f"定时任务执行结果：\n{action_answer}"
+        status = "pending" if task.get("schedule_mode") == "daily" else "done"
     except Exception as exc:
-        steps.append(_step("\u63a8\u9001\u4f01\u4e1a\u5fae\u4fe1", "failed", str(exc)))
-        content = f"\u5b9a\u65f6\u4efb\u52a1\u6267\u884c\u5931\u8d25\uff1a{exc}"
-        status = "failed"
+        steps[2] = _step("执行动作", "failed", str(exc))
+        content = f"定时任务执行失败：{exc}"
+        status = "pending" if task.get("schedule_mode") == "daily" else "failed"
 
     save_message(
         APP_NAME,
         task["session_id"],
         "assistant",
         content,
-        metadata={"task_title": "\u5b9a\u65f6\u4efb\u52a1\u5df2\u5b8c\u6210", "steps": steps, "skills": ["\u5b9a\u65f6\u63a8\u9001", "\u4f01\u4e1a\u5fae\u4fe1\u63a8\u9001"]},
+        metadata={"task_title": "定时任务已执行", "steps": steps, "skills": ["定时任务"]},
     )
-    _update_task(task_id, status=status, finished_at=datetime.now().isoformat())
+    scheduler = get_scheduler()
+    job = scheduler.get_job(task_id)
+    next_run = job.next_run_time.isoformat() if job and job.next_run_time else None
+    _update_task(
+        task_id,
+        status=status,
+        finished_at=datetime.now().isoformat(),
+        run_at=next_run or task.get("run_at"),
+        last_run_at=datetime.now().isoformat(),
+    )
 
 
 def _execute_skill_install_task(task_id: str) -> None:
@@ -419,32 +517,60 @@ def _execute_skill_install_task(task_id: str) -> None:
         _step("回写技能目录", "pending", "等待写入 Skills 面板"),
     ]
     try:
-        manifest = install_database_skill(INSTALLABLE_SKILLS_ROOT)
-        steps[1] = _step("安装技能文件", "done", f"已写入 {manifest['install_dir']}")
-        smoke = smoke_test_database_skill()
-        steps[2] = _step("执行连通性测试", "done", f"SELECT 1 成功，发现 {smoke['table_count']} 张表")
-        installed_skill = {
-            **manifest,
-            "source": "local-catalog",
-            "smoke_test": smoke,
-        }
-        _upsert_installed_skill(installed_skill)
-        steps[3] = _step("回写技能目录", "done", "已刷新 Skills 面板中的已安装技能")
-        answer = "\n".join(
-            [
-                f"已安装技能：{installed_skill['name']}",
-                f"- 技能标识：{installed_skill['skill_id']}",
-                f"- 数据库类型：{installed_skill['db_engine']}",
-                f"- 数据库路径：{installed_skill['db_path']}",
-                f"- Smoke Test：SELECT 1 成功，识别到 {smoke['table_count']} 张表",
-                f"- 示例表：{', '.join(smoke['tables'][:5]) or '暂无业务表'}",
-                "",
-                "现在你可以继续这样使用它：",
-                "- 帮我用数据库技能列出所有表",
-                "- 帮我查询数据库：SELECT * FROM chat_messages ORDER BY id DESC LIMIT 5",
-            ]
-        )
-        status = "done"
+        install_source = str(task.get("install_source") or "catalog")
+        install_spec = task.get("install_spec") or {}
+
+        if install_source == "github":
+            manifest = install_skill_from_github(install_spec, dest_root=INSTALLABLE_SKILLS_ROOT)
+            steps[1] = _step("安装技能文件", "done", f"已写入 {manifest['install_dir']}")
+            smoke = run_optional_smoke_test(Path(manifest["install_dir"]))
+            if smoke.get("ok"):
+                steps[2] = _step("执行连通性测试", "done", "已执行 smoke test")
+            else:
+                steps[2] = _step("执行连通性测试", "failed", smoke.get("error") or "未执行 smoke test")
+            installed_skill = {**manifest, "smoke_test": smoke}
+            _upsert_installed_skill(installed_skill)
+            steps[3] = _step("回写技能目录", "done", "已刷新 Skills 面板中的已安装技能")
+            answer = "\n".join(
+                [
+                    f"已安装技能：{installed_skill['name']}",
+                    f"- 技能标识：{installed_skill['skill_id']}",
+                    f"- 来源：GitHub",
+                    f"- 安装目录：{installed_skill['install_dir']}",
+                    f"- Smoke Test：{'成功' if smoke.get('ok') else '未通过'}",
+                ]
+            )
+            status = "done" if smoke.get("ok") else "failed"
+        else:
+            manifest = install_database_skill(task.get("skill_id") or DEFAULT_SKILL_ID, INSTALLABLE_SKILLS_ROOT)
+            steps[1] = _step("安装技能文件", "done", f"已写入 {manifest['install_dir']}")
+            smoke = smoke_test_database_skill(manifest)
+            if smoke.get("ok"):
+                steps[2] = _step("执行连通性测试", "done", f"SELECT 1 成功，发现 {smoke.get('table_count', 0)} 张表")
+            else:
+                steps[2] = _step("执行连通性测试", "failed", smoke.get("error") or "smoke test 失败")
+            installed_skill = {
+                **manifest,
+                "source": "local-catalog",
+                "smoke_test": smoke,
+            }
+            _upsert_installed_skill(installed_skill)
+            steps[3] = _step("回写技能目录", "done", "已刷新 Skills 面板中的已安装技能")
+            answer = "\n".join(
+                [
+                    f"已安装技能：{installed_skill['name']}",
+                    f"- 技能标识：{installed_skill['skill_id']}",
+                    f"- 数据库类型：{installed_skill['db_engine']}",
+                    f"- 连接配置：{connection_summary(installed_skill)}",
+                    f"- Smoke Test：{'成功' if smoke.get('ok') else '未通过'}",
+                    f"- 示例表：{', '.join(smoke.get('tables', [])[:5]) or '暂无业务表'}",
+                    "",
+                    "现在你可以继续这样使用它：",
+                    "- 帮我用数据库技能列出所有表",
+                    "- 帮我查询数据库：SELECT * FROM chat_messages ORDER BY id DESC LIMIT 5",
+                ]
+            )
+            status = "done" if smoke.get("ok") else "failed"
     except Exception as exc:
         steps[1] = _step("安装技能文件", "failed", str(exc))
         steps[2] = _step("执行连通性测试", "failed", "安装失败，未执行 smoke test")
@@ -468,10 +594,170 @@ def _execute_skill_install_task(task_id: str) -> None:
 
 
 def _detect_delay_seconds(text: str) -> int | None:
-    match = re.search(r"(\d+)\s*\u79d2(?:\u949f)?\u540e", text)
+    match = re.search(r"([0-9一二两三四五六七八九十百]+)\s*(秒|分钟|分|小时|天)(?:钟)?后", text)
     if not match:
         return None
-    return max(1, min(int(match.group(1)), 24 * 3600))
+    raw_value = match.group(1)
+    value = int(raw_value) if raw_value.isdigit() else _parse_chinese_number(raw_value)
+    if value <= 0:
+        return None
+    unit = match.group(2)
+    multiplier = {
+        "秒": 1,
+        "分钟": 60,
+        "分": 60,
+        "小时": 3600,
+        "天": 24 * 3600,
+    }.get(unit, 1)
+    return max(1, min(value * multiplier, 30 * 24 * 3600))
+
+
+def _parse_chinese_number(text: str) -> int:
+    digits = {"零": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    units = {"十": 10, "百": 100}
+    total = 0
+    current = 0
+    for char in text:
+        if char in digits:
+            current = digits[char]
+        elif char in units:
+            current = max(current, 1) * units[char]
+            total += current
+            current = 0
+    return total + current
+
+
+def _extract_daily_time(text: str) -> tuple[int, int] | None:
+    if "每天" not in text:
+        return None
+    clock_match = re.search(r"每天(?:早上|上午|中午|下午|晚上)?\s*(\d{1,2})(?:[:：点时](\d{1,2}))?", text)
+    if not clock_match:
+        return (9, 0)
+
+    hour = int(clock_match.group(1))
+    minute = int(clock_match.group(2) or 0)
+    if "下午" in text or "晚上" in text:
+        hour = hour if hour >= 12 else hour + 12
+    if "中午" in text and hour < 11:
+        hour += 12
+    hour = max(0, min(hour, 23))
+    minute = max(0, min(minute, 59))
+    return hour, minute
+
+
+def _strip_schedule_prefix(text: str) -> str:
+    cleaned = re.sub(r"^\s*(请)?\s*\d+\s*(秒|分钟|分|小时|天)(?:钟)?后", "", text).strip()
+    cleaned = re.sub(r"^\s*(请)?\s*每天(?:早上|上午|中午|下午|晚上)?\s*\d{0,2}(?:[:：点时]\d{0,2})?", "", cleaned).strip()
+    cleaned = cleaned.lstrip("，,。.:： ")
+    return cleaned or text.strip()
+
+
+def _extract_schedule_request(text: str) -> dict[str, object] | None:
+    delay_seconds = _detect_delay_seconds(text)
+    if delay_seconds is not None:
+        return {
+            "schedule_mode": "once",
+            "delay_seconds": delay_seconds,
+            "action_prompt": _strip_schedule_prefix(text),
+        }
+
+    daily_time = _extract_daily_time(text)
+    if daily_time is not None:
+        hour, minute = daily_time
+        return {
+            "schedule_mode": "daily",
+            "hour": hour,
+            "minute": minute,
+            "action_prompt": _strip_schedule_prefix(text),
+        }
+    return None
+
+
+def _is_kb_presence_request(text: str) -> bool:
+    compact = re.sub(r"\s+", "", text)
+    return ("知识库" in compact or "本地知识" in compact) and any(
+        keyword in compact for keyword in ["有没有", "有无", "是否有", "有关", "关于", "包含", "收录"]
+    )
+
+
+def _extract_kb_topic(text: str) -> str:
+    match = re.search(r"(?:关于|有关|有没有|是否有|包含|收录)([^？?。]+)", text)
+    if match:
+        topic = match.group(1)
+    else:
+        topic = text
+    topic = re.sub(r"^(于|的|与|相关|方面的)", "", topic).strip()
+    topic = re.sub(r"(的知识|知识|内容|资料|信息|吗|么|呢)$", "", topic).strip("：:，,。?？ ")
+    topic = topic.rstrip("的").strip()
+    return topic or text.strip()
+
+
+def _looks_like_lyric_document(raw_text: str) -> bool:
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    if len(lines) < 12:
+        return False
+    short_lines = [line for line in lines if len(line) <= 20]
+    repeated = len(lines) - len(set(lines))
+    return len(short_lines) >= max(10, len(lines) // 2) and repeated >= 2
+
+
+def _scan_rag_topic_presence(topic: str) -> tuple[bool, list[str]]:
+    matches: list[str] = []
+    topic_compact = re.sub(r"\s+", "", topic)
+    documents = list_documents()
+    if "歌词" in topic_compact:
+        lyric_matches: list[str] = []
+        for item in documents:
+            document = get_document(str(item.get("doc_id") or ""))
+            if not document:
+                continue
+            raw_text = str(document.get("content") or "")
+            if _looks_like_lyric_document(raw_text):
+                lyric_matches.append(str(item.get("file_name") or document.get("doc_id") or "未命名文档"))
+        unique = list(dict.fromkeys(lyric_matches))
+        return bool(unique), unique[:6]
+
+    chunks = search_chunks(topic, top_k=5)
+    for chunk in chunks:
+        score = int(chunk.get("score") or 0)
+        if score > 0:
+            file_name = str(chunk.get("file_name") or "未命名文档")
+            if file_name not in matches:
+                matches.append(file_name)
+
+    unique = list(dict.fromkeys(matches))
+    return bool(unique), unique[:6]
+
+
+def _answer_kb_presence(prompt_text: str) -> tuple[str, dict[str, object]]:
+    topic = _extract_kb_topic(prompt_text)
+    found, matched_files = _scan_rag_topic_presence(topic)
+    documents = list_documents()
+    if found:
+        answer = "\n".join(
+            [
+                f"有，当前知识库里检索到了和“{topic}”相关的内容。",
+                f"- 命中数量：{len(matched_files)}",
+                f"- 示例文档：{', '.join(matched_files)}",
+            ]
+        )
+        steps = [
+            _step("识别知识库问题", "done", "已识别到知识库存在性检查需求"),
+            _step("检索本地知识", "done", f"共命中 {len(matched_files)} 个相关文档"),
+        ]
+    else:
+        answer = "\n".join(
+            [
+                f"当前没有检索到和“{topic}”直接相关的知识。",
+                f"- 当前知识库文档数：{len(documents)}",
+                "- 如果你愿意，我可以先帮你上传相关材料，再基于知识库回答。",
+            ]
+        )
+        steps = [
+            _step("识别知识库问题", "done", "已识别到知识库存在性检查需求"),
+            _step("检索本地知识", "failed", f"未命中与“{topic}”相关的文档"),
+        ]
+    return answer, {"task_title": "知识库检查", "steps": steps, "skills": ["知识库问答"]}
 
 
 def _is_news_push_request(text: str) -> bool:
@@ -506,34 +792,27 @@ def _is_simple_chat_request(text: str) -> bool:
 
 
 def _is_search_request(text: str) -> bool:
-    keywords = ["联网", "搜索", "查一下", "查一查", "搜一下", "最新资料", "最新信息"]
+    keywords = ["联网", "搜索", "查一下", "查一查", "搜一下", "最新资料", "最新信息", "新闻", "局势", "天气", "最新动态"]
     return any(keyword in text for keyword in keywords)
 
 
 def _is_skill_install_request(text: str) -> bool:
     compact = re.sub(r"\s+", "", text.lower())
     wants_install = any(keyword in compact for keyword in ["安装", "装一个", "加一个", "install"])
-    skillish = any(keyword in compact for keyword in ["skill", "技能", "数据库连接", "数据库"])
+    skillish = any(keyword in compact for keyword in ["skill", "技能", "数据库连接", "数据库", "github.com", "repo"])
     return wants_install and skillish
-
-
-def _select_installable_skill(text: str) -> tuple[str, str, str]:
-    compact = re.sub(r"\s+", "", text.lower())
-    if "数据库" in compact or "database" in compact or "sqlite" in compact or "sql" in compact:
-        return (
-            DEFAULT_SKILL_ID,
-            DEFAULT_SKILL_NAME,
-            "已匹配到本地候选技能：SQLite 数据库连接，可直接连接当前演示仓库的 SQLite 数据库。",
-        )
-    return (
-        DEFAULT_SKILL_ID,
-        DEFAULT_SKILL_NAME,
-        "当前只内置了 SQLite 数据库连接候选技能，已按最接近需求自动选择。",
-    )
 
 
 def _has_installed_skill(skill_id: str) -> bool:
     return any(item.get("skill_id") == skill_id and item.get("status") == "installed" for item in _load_installed_skills())
+
+
+def _installed_db_skills() -> list[dict]:
+    return [
+        item
+        for item in _load_installed_skills()
+        if item.get("status") == "installed" and item.get("db_engine")
+    ]
 
 
 def _is_database_skill_request(text: str) -> bool:
@@ -549,18 +828,103 @@ def _is_database_skill_request(text: str) -> bool:
         "query database",
         "list tables",
         "show tables",
+        "mysql",
+        "postgres",
+        "postgresql",
+        "sqlite",
     ]
     normalized_keywords = [re.sub(r"\s+", "", keyword.lower()) for keyword in db_keywords]
     has_sql = "select" in compact and "from" in compact
-    return _has_installed_skill(DEFAULT_SKILL_ID) and (any(keyword in compact for keyword in normalized_keywords) or has_sql)
+    return any(keyword in compact for keyword in normalized_keywords) or has_sql
 
 
-def _build_skill_install_ack(session_id: str, prompt_text: str) -> tuple[str, dict[str, object], str]:
-    skill_id, skill_name, selection_reason = _select_installable_skill(prompt_text)
-    task = _create_skill_install_task(session_id, prompt_text, skill_id, skill_name)
+def _select_db_skill_for_request(prompt_text: str) -> dict:
+    installed = _installed_db_skills()
+    if not installed:
+        raise ValueError("当前还没有安装数据库 skill。可以先说：帮我安装一个数据库 skill。")
+
+    compact = re.sub(r"\s+", "", prompt_text.lower())
+    if "mysql" in compact:
+        for item in installed:
+            if str(item.get("db_engine")).lower() == "mysql":
+                return item
+        raise ValueError("未安装 MySQL 数据库 skill，请先安装 MySQL skill。")
+    if "postgres" in compact:
+        for item in installed:
+            if str(item.get("db_engine")).lower() in {"postgres", "postgresql"}:
+                return item
+        raise ValueError("未安装 PostgreSQL 数据库 skill，请先安装 PostgreSQL skill。")
+    if "sqlite" in compact:
+        for item in installed:
+            if str(item.get("db_engine")).lower() == "sqlite":
+                return item
+        raise ValueError("未安装 SQLite 数据库 skill，请先安装 SQLite skill。")
+
+    sorted_skills = sorted(
+        installed,
+        key=lambda item: str(item.get("installed_at") or ""),
+        reverse=True,
+    )
+    return sorted_skills[0]
+
+
+def _build_skill_install_ack(session_id: str, prompt_text: str) -> tuple[str, dict[str, object], str | None]:
+    github_spec = parse_github_install_spec(prompt_text)
+    if github_spec:
+        if github_spec.get("error") == "missing_repo_or_path":
+            answer = "未识别到 GitHub repo/path，请补充 repo 和 path，例如：repo openai/skills path skills/.curated/sqlite"
+            return answer, {"task_title": "技能安装任务", "steps": [_step("识别安装请求", "failed", answer)]}, None
+        if not github_spec.get("path"):
+            answer = "未识别到 GitHub 路径，请提供完整路径，例如：https://github.com/openai/skills/tree/main/skills/.curated/sqlite"
+            return answer, {"task_title": "技能安装任务", "steps": [_step("识别安装请求", "failed", answer)]}, None
+
+        skill_id = github_spec.get("skill_id") or Path(github_spec.get("path") or "").name or "github-skill"
+        skill_name = skill_id
+        selection_reason = "将使用 GitHub repo/path 安装技能。"
+        task = _create_skill_install_task(
+            session_id,
+            prompt_text,
+            skill_id,
+            skill_name,
+            install_source="github",
+            install_spec=github_spec,
+        )
+        answer = "\n".join(
+            [
+                f"已创建技能安装任务：{skill_name}",
+                f"- 任务编号：{task['task_id'][:8]}",
+                f"- 匹配结果：{selection_reason}",
+                "- 后续会在后台异步安装、自动执行 smoke test，并在聊天里回写结果。",
+            ]
+        )
+        assistant_meta = {
+            "task_title": "技能安装任务",
+            "steps": [
+                _step("识别安装请求", "done", "已识别到 GitHub 安装需求"),
+                _step("匹配候选技能", "done", selection_reason),
+                _step("创建后台任务", "running", f"安装任务 {task['task_id'][:8]} 已启动"),
+            ],
+            "skills": ["技能安装"],
+        }
+        return answer, assistant_meta, task["task_id"]
+
+    try:
+        entry, selection_reason = select_installable_skill(prompt_text)
+    except Exception as exc:
+        answer = f"技能安装失败：{exc}"
+        return answer, {"task_title": "技能安装任务", "steps": [_step("匹配候选技能", "failed", str(exc))]}, None
+
+    task = _create_skill_install_task(
+        session_id,
+        prompt_text,
+        entry.skill_id,
+        entry.name,
+        install_source="catalog",
+        install_spec={"db_engine": entry.db_engine},
+    )
     answer = "\n".join(
         [
-            f"已创建技能安装任务：{skill_name}",
+            f"已创建技能安装任务：{entry.name}",
             f"- 任务编号：{task['task_id'][:8]}",
             f"- 匹配结果：{selection_reason}",
             "- 后续会在后台异步安装、自动执行 smoke test，并在聊天里回写结果。",
@@ -610,6 +974,8 @@ def _is_browser_request(text: str) -> bool:
 def _extract_click_target(text: str) -> str:
     match = re.search(r"(?:点击|点开|点一下)([^，。,.；;！!？?\n]+)", text)
     if not match:
+        if re.search(r"(登录|立即登录|提交|确认登录)", text):
+            return "登录"
         return ""
     target = match.group(1)
     target = re.sub(r"^(一下|一下子|页面上的|网页上的)", "", target).strip()
@@ -619,14 +985,31 @@ def _extract_click_target(text: str) -> str:
 
 def _extract_login_credentials(text: str) -> tuple[str, str]:
     compact = text.strip()
-    match = re.search(r"用户名和密码[：:]\s*([^/\s]+)\s*/\s*([^\s，。；;]+)", compact)
-    if match:
-        return match.group(1).strip(), match.group(2).strip()
+    pair_patterns = [
+        r"(?:用户名和密码|账号密码|用户名/密码|账号/密码)[：: ]*[\"“']?([A-Za-z0-9_.-]{1,80})\s*/\s*([^\s，。；;\"“”'、]{1,120})",
+        r"使用[“\"']?([A-Za-z0-9_.-]{1,80})\s*/\s*([^\s，。；;\"“”'、]{1,120})[”\"']?(?:这个)?(?:用户名密码|账号密码)?",
+        r"[“\"']([A-Za-z0-9_.-]{1,80})\s*/\s*([^\s，。；;\"“”'、]{1,120})[”\"']",
+    ]
+    for pattern in pair_patterns:
+        match = re.search(pattern, compact)
+        if match:
+            return match.group(1).strip(), match.group(2).strip()
 
-    user_match = re.search(r"用户名[：:\s]+([^\s，。；;/]+)", compact)
-    password_match = re.search(r"密码[：:\s]+([^\s，。；;]+)", compact)
+    user_match = re.search(r"(?:用户名|账号|user(?:name)?|account)[：:\s]+([A-Za-z0-9_.-]{1,80})", compact, flags=re.IGNORECASE)
+    if not user_match:
+        user_match = re.search(r"(?:用户名|账号)\s*[为是]\s*([A-Za-z0-9_.-]{1,80})", compact)
+    password_match = re.search(r"(?:密码|password|pwd|pass)[：:\s]+([^\s，。；;\"“”'、]{1,120})", compact, flags=re.IGNORECASE)
+    if not password_match:
+        password_match = re.search(r"(?:密码)\s*[为是]\s*([^\s，。；;\"“”'、]{1,120})", compact)
     if user_match and password_match:
         return user_match.group(1).strip(), password_match.group(1).strip()
+
+    scrubbed = re.sub(r"https?://[^\s]+", " ", compact, flags=re.IGNORECASE)
+    scrubbed = re.sub(r"(?:输入框|用户名和密码输入框|账号密码输入框|输入用户名和密码|输入账号密码)", " ", scrubbed)
+    generic_pairs = re.findall(r"([A-Za-z0-9_.-]{2,})\s*/\s*([A-Za-z0-9_@#$%^&*().!+=:-]{2,})", scrubbed)
+    if generic_pairs:
+        username, password = generic_pairs[-1]
+        return username.strip(), password.strip()
     return "", ""
 
 
@@ -898,13 +1281,43 @@ def _run_browser_agent(session_id: str, prompt_text: str) -> tuple[str, dict[str
 
 
 def _run_database_skill(prompt_text: str) -> tuple[str, dict[str, object]]:
+    try:
+        skill = _select_db_skill_for_request(prompt_text)
+        connection = extract_connection_details(prompt_text, str(skill.get("db_engine") or "sqlite"))
+    except Exception as exc:
+        return (
+            f"数据库技能不可用：{exc}",
+            {
+                "task_title": "数据库技能任务",
+                "steps": [
+                    _step("识别数据库请求", "done", "已识别到数据库请求"),
+                    _step("检查技能安装", "failed", str(exc)),
+                ],
+                "skills": ["数据库技能"],
+            },
+        )
+
     query = _extract_select_query(prompt_text)
     if query:
-        result = db_skill_run_readonly_query(query)
+        try:
+            result = db_skill_run_readonly_query(query, skill, connection)
+        except Exception as exc:
+            return (
+                f"数据库技能执行失败：{exc}",
+                {
+                    "task_title": "数据库技能任务",
+                    "steps": [
+                        _step("识别数据库请求", "done", "已识别到只读 SQL 请求"),
+                        _step("连接数据库", "failed", str(exc)),
+                    ],
+                    "skills": ["数据库技能"],
+                },
+            )
         preview = json.dumps(result["rows"], ensure_ascii=False, indent=2)
         answer = "\n".join(
             [
                 "数据库技能执行完成。",
+                f"- 当前数据库：{connection_summary(skill, connection)}",
                 f"- 查询语句：{result['query']}",
                 f"- 返回行数：{result['row_count']}",
                 "",
@@ -916,17 +1329,30 @@ def _run_database_skill(prompt_text: str) -> tuple[str, dict[str, object]]:
             "task_title": "数据库技能任务",
             "steps": [
                 _step("识别数据库请求", "done", "已识别到只读 SQL 请求"),
-                _step("连接数据库", "done", "已连接本地 SQLite 演示数据库"),
+                _step("连接数据库", "done", f"已连接数据库：{connection_summary(skill, connection)}"),
                 _step("执行查询", "done", f"已返回 {result['row_count']} 行结果"),
             ],
             "skills": ["数据库技能"],
         }
 
-    tables = db_skill_list_tables()
+    try:
+        tables = db_skill_list_tables(skill, connection)
+    except Exception as exc:
+        return (
+            f"数据库技能执行失败：{exc}",
+            {
+                "task_title": "数据库技能任务",
+                "steps": [
+                    _step("识别数据库请求", "done", "已识别到数据库结构查询需求"),
+                    _step("连接数据库", "failed", str(exc)),
+                ],
+                "skills": ["数据库技能"],
+            },
+        )
     answer = "\n".join(
         [
             "数据库技能执行完成。",
-            f"- 当前数据库：{settings.data_dir / 'openclaw_demo.db'}",
+            f"- 当前数据库：{connection_summary(skill, connection)}",
             f"- 表数量：{len(tables)}",
             f"- 表列表：{', '.join(tables) if tables else '暂无业务表'}",
         ]
@@ -935,7 +1361,7 @@ def _run_database_skill(prompt_text: str) -> tuple[str, dict[str, object]]:
         "task_title": "数据库技能任务",
         "steps": [
             _step("识别数据库请求", "done", "已识别到数据库结构查询需求"),
-            _step("连接数据库", "done", "已连接本地 SQLite 演示数据库"),
+            _step("连接数据库", "done", f"已连接数据库：{connection_summary(skill, connection)}"),
             _step("读取表结构", "done", f"已识别 {len(tables)} 张表"),
         ],
         "skills": ["数据库技能"],
@@ -1068,6 +1494,7 @@ def _generate_non_stream_response(
     image_bytes: bytes | None,
     image_content_type: str,
     metadata: dict[str, object],
+    allow_scheduling: bool = True,
 ) -> tuple[str, dict[str, object]] | None:
     if image_bytes is not None:
         answer = vision_chat(
@@ -1112,22 +1539,39 @@ def _generate_non_stream_response(
             ],
         }
 
-    if _is_news_push_request(prompt_text) and _detect_delay_seconds(prompt_text):
-        seconds = _detect_delay_seconds(prompt_text) or 5
-        task = _create_news_task(session_id, seconds, prompt_text)
-        return (
-            f"\u597d\u7684\uff0c\u6211\u5df2\u7ecf\u8bb0\u4e0b\u8fd9\u4e2a\u5b9a\u65f6\u4efb\u52a1\u3002\n{seconds} \u79d2\u540e\u4f1a\u81ea\u52a8\u6574\u7406\u6700\u65b0 AI \u8d44\u8baf\u603b\u7ed3\uff0c\u5e76\u63a8\u9001\u5230\u4f01\u4e1a\u5fae\u4fe1\u3002",
-            {
-                "task_title": "\u5df2\u521b\u5efa\u5b9a\u65f6\u4efb\u52a1",
-                "steps": [
-                    _step("\u7406\u89e3\u9700\u6c42", "done", "\u8bc6\u522b\u5230\u5b9a\u65f6\u63a8\u9001\u9700\u6c42"),
-                    _step("\u8c03\u7528\u5b9a\u65f6\u63a8\u9001", "done", "\u5df2\u521b\u5efa\u8c03\u5ea6\u4efb\u52a1\u5e76\u6ce8\u518c\u5230\u8c03\u5ea6\u5668"),
-                    _step("\u6301\u4e45\u5316\u4efb\u52a1", "done", f"\u4efb\u52a1\u5df2\u4fdd\u5b58\uff0c\u7f16\u53f7 {task['task_id'][:8]}"),
-                    _step("\u7b49\u5f85\u6267\u884c", "running", f"\u8ba1\u5212\u6267\u884c\u65f6\u95f4\uff1a{task['run_at'][:19].replace('T', ' ')}"),
-                ],
-                "skills": ["\u5b9a\u65f6\u63a8\u9001", "\u4f01\u4e1a\u5fae\u4fe1\u63a8\u9001"],
-            },
-        )
+    if allow_scheduling:
+        schedule_request = _extract_schedule_request(prompt_text)
+        if schedule_request is not None:
+            task = _create_scheduled_action_task(
+                session_id=session_id,
+                prompt_text=prompt_text,
+                action_prompt=str(schedule_request["action_prompt"]),
+                delay_seconds=schedule_request.get("delay_seconds"),
+                schedule_mode=str(schedule_request.get("schedule_mode") or "once"),
+                hour=schedule_request.get("hour"),
+                minute=schedule_request.get("minute"),
+            )
+            schedule_label = "每天执行" if task.get("schedule_mode") == "daily" else "稍后执行"
+            return (
+                "\n".join(
+                    [
+                        "已创建通用定时任务。",
+                        f"- 任务编号：{task['task_id'][:8]}",
+                        f"- 执行动作：{task['action_prompt']}",
+                        f"- 调度方式：{schedule_label}",
+                        f"- 下次执行：{task['run_at'][:19].replace('T', ' ')}",
+                    ]
+                ),
+                {
+                    "task_title": "已创建定时任务",
+                    "steps": [
+                        _step("理解需求", "done", "已识别到通用定时任务需求"),
+                        _step("持久化任务", "done", f"任务已保存，编号 {task['task_id'][:8]}"),
+                        _step("等待执行", "running", f"计划执行时间：{task['run_at'][:19].replace('T', ' ')}"),
+                    ],
+                    "skills": ["定时任务"],
+                },
+            )
 
     if _is_news_push_request(prompt_text):
         digest = refresh_ai_digest(8.0)
@@ -1158,9 +1602,13 @@ def _generate_non_stream_response(
             },
         )
 
+    if _is_kb_presence_request(prompt_text):
+        return _answer_kb_presence(prompt_text)
+
     if _is_skill_install_request(prompt_text):
         answer, assistant_meta, task_id = _build_skill_install_ack(session_id, prompt_text)
-        assistant_meta["pending_skill_install_task_id"] = task_id
+        if task_id:
+            assistant_meta["pending_skill_install_task_id"] = task_id
         return answer, assistant_meta
 
     if _is_database_skill_request(prompt_text):
@@ -1350,20 +1798,35 @@ async def message(
                     _step("执行发送", "done", "已完成演示发送并写入邮件面板"),
                 ],
             }
-        elif _is_news_push_request(prompt_text) and _detect_delay_seconds(prompt_text):
-            seconds = _detect_delay_seconds(prompt_text) or 5
-            task = _create_news_task(session_id, seconds, prompt_text)
-            answer = (
-                f"好的，我已经记下这个定时任务。\n"
-                f"{seconds} 秒后会自动整理最新 AI 早报，并推送到企业微信。"
+        elif _extract_schedule_request(prompt_text) is not None:
+            schedule_request = _extract_schedule_request(prompt_text) or {}
+            task = _create_scheduled_action_task(
+                session_id=session_id,
+                prompt_text=prompt_text,
+                action_prompt=str(schedule_request.get("action_prompt") or prompt_text),
+                delay_seconds=schedule_request.get("delay_seconds"),
+                schedule_mode=str(schedule_request.get("schedule_mode") or "once"),
+                hour=schedule_request.get("hour"),
+                minute=schedule_request.get("minute"),
+            )
+            schedule_label = "每天执行" if task.get("schedule_mode") == "daily" else "稍后执行"
+            answer = "\n".join(
+                [
+                    "已创建通用定时任务。",
+                    f"- 任务编号：{task['task_id'][:8]}",
+                    f"- 执行动作：{task['action_prompt']}",
+                    f"- 调度方式：{schedule_label}",
+                    f"- 下次执行：{task['run_at'][:19].replace('T', ' ')}",
+                ]
             )
             assistant_meta = {
                 "task_title": "已创建定时任务",
                 "steps": [
-                    _step("理解需求", "done", "识别到定时推送需求"),
+                    _step("理解需求", "done", "已识别到通用定时任务需求"),
                     _step("持久化任务", "done", f"任务已保存，编号 {task['task_id'][:8]}"),
                     _step("等待执行", "running", f"计划执行时间：{task['run_at'][:19].replace('T', ' ')}"),
                 ],
+                "skills": ["定时任务"],
             }
         elif _is_news_push_request(prompt_text):
             digest = await run_in_threadpool(refresh_ai_digest, 8.0)
@@ -1388,6 +1851,8 @@ async def message(
                     _step("整理结论", "done", "已生成适合演示的答复"),
                 ],
             }
+        elif _is_kb_presence_request(prompt_text):
+            answer, assistant_meta = await run_in_threadpool(_answer_kb_presence, prompt_text)
         elif _is_skill_install_request(prompt_text):
             answer, assistant_meta, _ = _build_skill_install_ack(session_id, prompt_text)
         elif _is_database_skill_request(prompt_text):

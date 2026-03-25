@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import atexit
+import concurrent.futures
+import queue
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -121,13 +123,19 @@ class BrowserSession:
     context: BrowserContext
     page: Page
     lock: threading.Lock
-    owner_thread_id: int
 
 
 _sessions: dict[str, BrowserSession] = {}
 _sessions_guard = threading.Lock()
 _close_timers: dict[str, threading.Timer] = {}
-AUTO_CLOSE_DELAY_SECONDS = 12.0
+AUTO_CLOSE_DELAY_SECONDS = 20.0
+
+_browser_task_queue: queue.Queue[
+    tuple[Any, tuple[Any, ...], dict[str, Any], concurrent.futures.Future[Any]] | None
+] = queue.Queue()
+_browser_worker_thread: threading.Thread | None = None
+_browser_worker_thread_id: int | None = None
+_browser_worker_guard = threading.Lock()
 
 
 def _browser_executable() -> str:
@@ -135,6 +143,42 @@ def _browser_executable() -> str:
         if candidate.exists():
             return str(candidate)
     raise RuntimeError("未找到可用的 Chrome 或 Edge 浏览器，请先安装浏览器。")
+
+
+def _browser_worker_main() -> None:
+    global _browser_worker_thread_id
+    _browser_worker_thread_id = threading.get_ident()
+    while True:
+        item = _browser_task_queue.get()
+        if item is None:
+            return
+        func, args, kwargs, future = item
+        if future.cancelled():
+            continue
+        try:
+            future.set_result(func(*args, **kwargs))
+        except BaseException as exc:
+            future.set_exception(exc)
+
+
+def _ensure_browser_worker() -> threading.Thread:
+    global _browser_worker_thread
+    with _browser_worker_guard:
+        if _browser_worker_thread is not None and _browser_worker_thread.is_alive():
+            return _browser_worker_thread
+        worker = threading.Thread(target=_browser_worker_main, name="playwright-browser-worker", daemon=True)
+        worker.start()
+        _browser_worker_thread = worker
+        return worker
+
+
+def _run_on_browser_thread(func: Any, *args: Any, **kwargs: Any) -> Any:
+    _ensure_browser_worker()
+    if threading.get_ident() == _browser_worker_thread_id:
+        return func(*args, **kwargs)
+    future: concurrent.futures.Future[Any] = concurrent.futures.Future()
+    _browser_task_queue.put((func, args, kwargs, future))
+    return future.result()
 
 
 def _wait_for_page(page: Page) -> None:
@@ -266,25 +310,13 @@ def _fill_input(locator: Any, value: str) -> None:
     locator.fill(value, timeout=5000)
 
 
-def get_browser_session(session_id: str) -> BrowserSession:
-    current_thread_id = threading.get_ident()
-    recreate_existing = None
+def _get_browser_session(session_id: str) -> BrowserSession:
     with _sessions_guard:
         timer = _close_timers.pop(session_id, None)
         if timer is not None:
             timer.cancel()
         existing = _sessions.get(session_id)
-        if existing:
-            if existing.owner_thread_id == current_thread_id:
-                return existing
-            recreate_existing = existing
-
-    if recreate_existing is not None:
-        close_browser_session(session_id)
-
-    with _sessions_guard:
-        existing = _sessions.get(session_id)
-        if existing and existing.owner_thread_id == current_thread_id:
+        if existing is not None:
             return existing
         playwright = sync_playwright().start()
         browser = playwright.chromium.launch(
@@ -300,19 +332,22 @@ def get_browser_session(session_id: str) -> BrowserSession:
             context=context,
             page=page,
             lock=threading.Lock(),
-            owner_thread_id=current_thread_id,
         )
         _sessions[session_id] = session
         return session
 
 
-def close_browser_session(session_id: str) -> None:
+def get_browser_session(session_id: str) -> BrowserSession:
+    return _run_on_browser_thread(_get_browser_session, session_id)
+
+
+def _close_browser_session(session_id: str) -> None:
     with _sessions_guard:
         timer = _close_timers.pop(session_id, None)
         if timer is not None:
             timer.cancel()
         session = _sessions.pop(session_id, None)
-    if not session:
+    if session is None:
         return
     try:
         session.context.close()
@@ -323,11 +358,22 @@ def close_browser_session(session_id: str) -> None:
             session.playwright.stop()
 
 
-def close_all_browser_sessions() -> None:
+def close_browser_session(session_id: str) -> None:
+    _run_on_browser_thread(_close_browser_session, session_id)
+
+
+def _close_all_browser_sessions() -> None:
     with _sessions_guard:
         session_ids = list(_sessions.keys())
     for session_id in session_ids:
-        close_browser_session(session_id)
+        _close_browser_session(session_id)
+
+
+def close_all_browser_sessions() -> None:
+    try:
+        _run_on_browser_thread(_close_all_browser_sessions)
+    except Exception:
+        pass
 
 
 atexit.register(close_all_browser_sessions)
@@ -340,14 +386,14 @@ def schedule_browser_session_close(session_id: str, delay_seconds: float = AUTO_
         timer = _close_timers.pop(session_id, None)
         if timer is not None:
             timer.cancel()
-        next_timer = threading.Timer(delay_seconds, close_browser_session, args=[session_id])
+        next_timer = threading.Timer(delay_seconds, lambda: _run_on_browser_thread(_close_browser_session, session_id))
         next_timer.daemon = True
         _close_timers[session_id] = next_timer
         next_timer.start()
 
 
-def execute_browser_tool(session_id: str, name: str, args: dict[str, Any]) -> dict[str, Any]:
-    session = get_browser_session(session_id)
+def _execute_browser_tool(session_id: str, name: str, args: dict[str, Any]) -> dict[str, Any]:
+    session = _get_browser_session(session_id)
     with session.lock:
         if name == "browser_open_page":
             url = str(args.get("url") or "").strip()
@@ -372,7 +418,7 @@ def execute_browser_tool(session_id: str, name: str, args: dict[str, Any]) -> di
             username_locator = _first_visible(
                 session.page,
                 [
-                    "input[placeholder*='用户名']",
+                    "input[placeholder*='用户']",
                     "input[placeholder*='账号']",
                     "input[autocomplete='username']",
                     "input[name*='user' i]",
@@ -404,13 +450,12 @@ def execute_browser_tool(session_id: str, name: str, args: dict[str, Any]) -> di
             _fill_input(username_locator, username)
             _fill_input(password_locator, password)
             snapshot = _snapshot(session.page)
-            result = {
+            schedule_browser_session_close(session_id)
+            return {
                 "ok": True,
                 "filled": True,
                 "snapshot": snapshot,
             }
-            schedule_browser_session_close(session_id)
-            return result
 
         if name == "browser_click":
             element_index = int(args.get("element_index") or 0)
@@ -450,3 +495,7 @@ def execute_browser_tool(session_id: str, name: str, args: dict[str, Any]) -> di
             return result
 
         return {"ok": False, "error": f"未知浏览器工具：{name}"}
+
+
+def execute_browser_tool(session_id: str, name: str, args: dict[str, Any]) -> dict[str, Any]:
+    return _run_on_browser_thread(_execute_browser_tool, session_id, name, args)

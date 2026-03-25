@@ -1,2 +1,2 @@
-"""Shared utilities for the OpenClaw demo suite."""
+"""Shared utilities for the OpenClaw For Tsingyun."""
 

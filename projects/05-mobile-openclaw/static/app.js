@@ -532,7 +532,7 @@ function renderMessages(messages) {
         chatWindow.innerHTML = `
             <div class="chat-stage">
                 <div class="welcome-card">
-                    <strong>🦞 我是清云小龙虾</strong>
+                    <strong>🦞 我是清云小清虾</strong>
                     <p>来自武汉技术平台部，可以陪你聊天、看图分析、结合本地知识回答问题，也能帮你安排和执行任务。</p>
                 </div>
             </div>

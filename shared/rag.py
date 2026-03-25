@@ -126,9 +126,12 @@ def search_chunks(query: str, top_k: int = 4) -> list[dict]:
         ][:top_k]
 
     for document in documents:
+        file_name_terms = _terms(document.get("file_name", ""))
         for chunk in document["chunks"]:
             content_terms = _terms(chunk["content"])
-            score = _overlap_score(query_terms, content_terms)
+            content_score = _overlap_score(query_terms, content_terms)
+            file_name_score = _overlap_score(query_terms, file_name_terms)
+            score = content_score + (file_name_score * 3)
             if score <= 0:
                 continue
             scored.append(
@@ -140,10 +143,19 @@ def search_chunks(query: str, top_k: int = 4) -> list[dict]:
                         "chunk_id": chunk["chunk_id"],
                         "content": chunk["content"],
                         "score": score,
+                        "content_score": content_score,
+                        "file_name_score": file_name_score,
                     },
                 )
             )
-    scored.sort(key=lambda item: item[0], reverse=True)
+    scored.sort(
+        key=lambda item: (
+            item[0],
+            item[1].get("file_name_score", 0),
+            item[1].get("content_score", 0),
+        ),
+        reverse=True,
+    )
     if scored:
         return [item[1] for item in scored[:top_k]]
     return [
@@ -154,7 +166,7 @@ def search_chunks(query: str, top_k: int = 4) -> list[dict]:
             "content": chunk["content"],
             "score": 0,
         }
-        for document in documents
+        for document in reversed(documents)
         for chunk in document["chunks"][:1]
     ][:top_k]
 

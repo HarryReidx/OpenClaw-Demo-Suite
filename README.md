@@ -1,4 +1,4 @@
-# OpenClaw Demo Suite
+# OpenClaw For Tsingyun
 
 这是一个用于公司内部演示的大模型与 Agent 能力的渐进式项目集合。整套仓库统一使用 `Python + FastAPI + Jinja2 + vanilla JS + SQLite + Qwen(OpenAI兼容接口)`，并拆成 7 个可以独立讲解的子工程。
 

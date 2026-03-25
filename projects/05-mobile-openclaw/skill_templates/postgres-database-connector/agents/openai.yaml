@@ -1,0 +1,4 @@
+interface:
+  display_name: "PostgreSQL Database Connector"
+  short_description: "Connect to a PostgreSQL database and run smoke tests"
+  default_prompt: "Connect to this PostgreSQL database, verify access with a smoke test, and summarize the available tables."

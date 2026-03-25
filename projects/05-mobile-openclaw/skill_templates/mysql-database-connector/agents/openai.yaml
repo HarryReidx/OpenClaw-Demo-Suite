@@ -1,0 +1,4 @@
+interface:
+  display_name: "MySQL Database Connector"
+  short_description: "Connect to a MySQL database and run smoke tests"
+  default_prompt: "Connect to this MySQL database, verify access with a smoke test, and summarize the available tables."

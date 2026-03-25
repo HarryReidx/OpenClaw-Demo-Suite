@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>06. AI 资讯定时推送</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260325a" />
+</head>
+<body>
+    <main class="app-shell">
+        <header class="hero">
+            <div>
+                <p class="eyebrow">06 / Scheduled Push</p>
+                <h1>AI 资讯获取与企业微信推送</h1>
+                <p class="subtitle">支持手动获取、定时推送，并以更适合阅读的 Markdown 资讯页样式展示。</p>
+            </div>
+            <div class="hero-actions">
+                <button id="refreshButton">立即获取并推送</button>
+                <button id="scheduleButton" class="ghost">开启定时刷新</button>
+            </div>
+        </header>
+
+        <section class="top-grid">
+            <section class="digest-panel">
+                <div class="panel-head">
+                    <h2>AI 资讯页预览</h2>
+                    <span id="lastUpdated">尚未操作</span>
+                </div>
+                <div id="digestOutput" class="digest-renderer"></div>
+            </section>
+            <section class="push-panel">
+                <div class="panel-head">
+                    <h2>当前状态</h2>
+                </div>
+                <div class="push-card">
+                    <span class="push-label">企业微信推送</span>
+                    <strong id="pushStatus">尚未操作</strong>
+                    <p id="scheduleStatus" class="push-status">定时刷新：未开启</p>
+                </div>
+            </section>
+        </section>
+
+        <section class="news-grid" id="newsGrid">
+            <p class="hint">当前还没有加载资讯。</p>
+        </section>
+    </main>
+    <div class="global-watermark">Powered By 清云智通 · 武汉研发中心</div>
+    <script src="/static/app.js?v=20260325a"></script>
+</body>
+</html>

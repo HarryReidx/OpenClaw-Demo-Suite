@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>07. Simulated OpenClaw</title>
+    <link rel="stylesheet" href="/static/styles.css?v=20260325c" />
+</head>
+<body>
+    <main class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <p class="eyebrow">07 / Simulated OpenClaw</p>
+                <h1>
+                    <span class="brand-title-main">🦞 一只来自清云的</span>
+                    <span class="brand-title-accent">小清虾</span>
+                    <span class="brand-title-mobile">🦞 清云的小清虾</span>
+                </h1>
+            </div>
+            <button type="button" class="menu-button" id="menuButton" aria-label="打开菜单">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </header>
+
+        <section class="chat-window" id="chatWindow" aria-live="polite"></section>
+
+        <form id="messageForm" class="input-panel">
+            <div class="composer-box">
+                <textarea id="textInput" name="text" rows="3" placeholder="例如：10 秒后给我推送一份 AI 资讯，或者直接和清云小龙虾对话"></textarea>
+                <section class="quick-actions" id="quickActions">
+                    <button type="button" class="chip" data-prompt="帮我把今天的 AI 分享整理成 3 个重点">整理要点</button>
+                    <button type="button" class="chip" data-prompt="请分析这张图片，提取画面重点">看图分析</button>
+                    <button type="button" class="chip" data-prompt="5秒钟后给我发送一个最新的AI资讯总结">5 秒后推送 AI 早报</button>
+                    <button type="button" class="chip" data-prompt="给我一段适合群里同步的 AI 更新播报">改写消息</button>
+                    <button type="button" class="chip" data-prompt="给全员发一个考试认知邮件，以及会议纪要">群发邮件</button>
+                </section>
+                <div id="uploadPreview" class="upload-preview hidden"></div>
+            </div>
+            <div class="toolbar">
+                <div class="tool-buttons">
+                    <label class="icon-button" for="imageInput" title="上传图片">
+                        <span class="image-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M5 6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 17.5z" />
+                                <circle cx="9" cy="10" r="1.5" />
+                                <path d="M7.5 16l3.2-3.4a1 1 0 0 1 1.45 0l1.7 1.85 1.25-1.35a1 1 0 0 1 1.45 0L19 16" />
+                            </svg>
+                        </span>
+                        <input type="file" id="imageInput" name="image" accept="image/*" />
+                    </label>
+                    <label class="icon-button" for="kbQuickInput" title="增加知识">
+                        <span class="doc-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M8 4.75h6.5L19 9.25V18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z" />
+                                <path d="M14.5 4.75V9.5H19" />
+                                <path d="M9 13h6" />
+                                <path d="M9 16h6" />
+                            </svg>
+                        </span>
+                        <input type="file" id="kbQuickInput" accept=".txt,.md,.docx" />
+                    </label>
+                    <button type="button" class="icon-button" id="clearButton" title="清空上下文">🧹</button>
+                </div>
+                <input type="hidden" id="sessionId" name="session_id" value="{{ session_id }}" />
+                <button type="submit" id="sendButton">发送</button>
+            </div>
+            <p class="hint" id="fileHint"></p>
+        </form>
+    </main>
+
+    <div class="menu-sheet hidden" id="menuSheet">
+        <div class="menu-panel">
+            <div class="menu-head">
+                <h2>工作台菜单</h2>
+                <button type="button" class="close-button" id="closeMenuButton">关闭</button>
+            </div>
+
+            <div class="menu-tabs">
+                <button type="button" class="menu-item active" id="knowledgeMenuButton">知识库</button>
+                <button type="button" class="menu-item" id="scheduleMenuButton">定时任务</button>
+                <button type="button" class="menu-item" id="skillsMenuButton">Skills</button>
+                <button type="button" class="menu-item" id="memoryMenuButton">记忆</button>
+                <button type="button" class="menu-item" id="emailsMenuButton">邮件</button>
+            </div>
+
+            <section class="knowledge-modal" id="knowledgeModal">
+                <div class="knowledge-head">
+                    <h3>增加本地知识</h3>
+                    <label class="doc-upload" for="kbFileInput">
+                        <span>上传 txt / md / docx</span>
+                        <input type="file" id="kbFileInput" accept=".txt,.md,.docx" />
+                    </label>
+                </div>
+                <p class="side-hint" id="kbHint">上传后，后续对话会默认结合这些知识回答，但不会直接暴露原文片段。</p>
+                <div class="doc-list" id="docList"></div>
+            </section>
+
+            <section class="knowledge-modal hidden" id="scheduleModal">
+                <div class="knowledge-head">
+                    <h3>最近的定时任务</h3>
+                    <button type="button" class="close-button ghost-button" id="refreshTasksButton">刷新</button>
+                </div>
+                <p class="side-hint" id="taskHint">这里会展示最近创建的定时任务状态和时间信息。</p>
+                <div class="task-list" id="taskList"></div>
+            </section>
+
+            <section class="knowledge-modal hidden" id="skillsModal">
+                <div class="knowledge-head">
+                    <h3>当前 Skills</h3>
+                    <button type="button" class="close-button ghost-button" id="refreshSkillsButton">刷新</button>
+                </div>
+                <p class="side-hint" id="skillsHint">这里展示当前 OpenClaw 示例已经接入的能力。</p>
+                <div class="task-list" id="skillsList"></div>
+            </section>
+
+            <section class="knowledge-modal hidden" id="memoryModal">
+                <div class="knowledge-head">
+                    <h3>当前会话记忆</h3>
+                    <button type="button" class="close-button ghost-button" id="refreshMemoryButton">刷新</button>
+                </div>
+                <p class="side-hint" id="memoryHint">这里会展示当前 session 的最近记忆摘要。</p>
+                <div class="task-list" id="memoryList"></div>
+            </section>
+
+            <section class="knowledge-modal hidden" id="emailsModal">
+                <div class="knowledge-head">
+                    <h3>最近邮件</h3>
+                    <button type="button" class="close-button ghost-button" id="refreshEmailsButton">刷新</button>
+                </div>
+                <p class="side-hint" id="emailsHint">这里会展示当前会话发送过的邮件，并支持预览内容。</p>
+                <div class="task-list" id="emailsList"></div>
+            </section>
+        </div>
+    </div>
+
+    <div class="global-watermark">Powered By 清云智通 · 武汉研发中心</div>
+    <script>window.__SESSION_ID__ = "{{ session_id }}";</script>
+    <script src="/static/app.js?v=20260325c"></script>
+</body>
+</html>

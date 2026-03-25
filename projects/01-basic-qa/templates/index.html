@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>01. 最简单 LLM 一问一答</title>
+    <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+    <main class="page">
+        <section class="hero">
+            <p class="eyebrow">01 / Basic LLM</p>
+            <h1>从一个问题，到一句回答</h1>
+            <p class="lead">这是整套演示里最基础的一站。它只做一件事：把你的输入交给大模型，再把输出展示回来。</p>
+        </section>
+
+        <section class="panel">
+            <label class="label" for="prompt">试着问一个问题</label>
+            <textarea id="prompt" placeholder="例如：用一句话解释什么是 Agent"></textarea>
+            <div class="actions">
+                <button id="askButton">发送给大模型</button>
+                <span id="status">等待输入</span>
+            </div>
+        </section>
+
+        <section class="panel answer-panel">
+            <div class="answer-head">
+                <h2>模型回答</h2>
+                <span class="badge">单轮问答</span>
+            </div>
+            <pre id="answer">这里会显示大模型的回答。</pre>
+        </section>
+
+        <section class="notes">
+            <h3>这一站建议怎么讲</h3>
+            <ul>
+                <li>先强调：这还不是 Agent，只是一次性的问答推理。</li>
+                <li>可以顺带解释 Prompt、模型、温度这些最基础概念。</li>
+                <li>先让大家建立“大模型能回答问题”的直觉，再进入后面的能力跃迁。</li>
+            </ul>
+        </section>
+    </main>
+    <div class="global-watermark">Powered By 清云智通 · 武汉研发中心</div>
+    <script src="/static/app.js"></script>
+</body>
+</html>

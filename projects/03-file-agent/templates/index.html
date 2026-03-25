@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>03. 可以新建文件并写文案的 Agent</title>
+    <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+    <main class="layout">
+        <section class="hero">
+            <div>
+                <p class="eyebrow">03 / Agent + Tools</p>
+                <h1>不只会回答，还会把结果写成文件</h1>
+                <p class="lead">这一站用来讲清楚什么是 Agent。关键差别不在“答得更像人”，而在“能不能调用工具去做事”。</p>
+            </div>
+            <div class="hero-note">
+                <span>安全范围</span>
+                <strong>`demo_outputs/file-agent/`</strong>
+            </div>
+        </section>
+
+        <section class="workspace">
+            <div class="panel">
+                <label for="taskInput">交给 Agent 的任务</label>
+                <textarea id="taskInput" placeholder="例如：帮我写一份公司内部 AI 分享会的开场通知，语气专业但轻松，并保存成文件。"></textarea>
+                <div class="actions">
+                    <button id="runButton">让 Agent 去做</button>
+                    <span id="status">等待任务</span>
+                </div>
+                <div id="resultCard" class="result-card hidden">
+                    <p class="result-meta" id="resultMeta"></p>
+                    <div id="skillTags" class="skill-tags"></div>
+                    <div id="activityList" class="activity-list"></div>
+                    <pre id="answerOutput"></pre>
+                    <h3>文件预览</h3>
+                    <pre id="previewOutput"></pre>
+                </div>
+            </div>
+
+            <aside class="panel side-panel">
+                <div class="side-head">
+                    <h2>最近生成的文件</h2>
+                    <button id="refreshFilesButton" class="ghost">刷新</button>
+                </div>
+                <div id="fileList">
+                    {% for file in files %}
+                    <article class="file-item">
+                        <strong>{{ file.name }}</strong>
+                        <span>{{ file.path }}</span>
+                        <p>{{ file.preview }}</p>
+                    </article>
+                    {% endfor %}
+                </div>
+            </aside>
+        </section>
+    </main>
+    <div class="global-watermark">Powered By 清云智通 · 武汉研发中心</div>
+    <script src="/static/app.js"></script>
+</body>
+</html>

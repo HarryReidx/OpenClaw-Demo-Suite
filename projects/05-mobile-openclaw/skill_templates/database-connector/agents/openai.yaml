@@ -1,0 +1,4 @@
+interface:
+  display_name: "Database Connector"
+  short_description: "Connect to a database and run smoke tests"
+  default_prompt: "Connect to this database, verify access with a smoke test, and summarize the available tables."

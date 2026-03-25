@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ query }} - 网页报告</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f6f3ed;
+            --ink: #19242b;
+            --muted: #5f6c75;
+            --line: rgba(25, 36, 43, 0.1);
+            --brand: #0a6a66;
+            --accent: #d35f2d;
+            font-family: "Segoe UI", "PingFang SC", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at top left, rgba(10, 106, 102, 0.14), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(211, 95, 45, 0.16), transparent 28%),
+                var(--bg);
+            color: var(--ink);
+        }
+
+        main {
+            max-width: 1040px;
+            margin: 0 auto;
+            padding: 38px 20px 48px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.84);
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            padding: 24px;
+            margin-bottom: 18px;
+        }
+
+        .eyebrow {
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--brand);
+            font-size: 0.86rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        h1,
+        h2 {
+            margin: 0 0 12px;
+        }
+
+        .meta {
+            color: var(--muted);
+            margin: 0;
+        }
+
+        .summary-text {
+            white-space: pre-wrap;
+            line-height: 1.8;
+        }
+
+        .source-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 14px;
+        }
+
+        .card {
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 16px;
+            background: white;
+        }
+
+        .card a {
+            color: var(--ink);
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .card p {
+            color: var(--muted);
+            line-height: 1.7;
+        }
+
+        .card small {
+            display: block;
+            margin-top: 10px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="panel">
+            <div class="eyebrow">Web Report</div>
+            <h1>{{ query }}</h1>
+            <p class="meta">网页报告生成时间：{{ generated_at }}</p>
+        </section>
+        <section class="panel">
+            <h2>AI 摘要</h2>
+            <div class="summary-text">{{ summary }}</div>
+        </section>
+        <section class="panel">
+            <h2>参考来源</h2>
+            <div class="source-grid">
+                {% for item in results %}
+                <article class="card">
+                    <a href="{{ item.url }}" target="_blank" rel="noreferrer">{{ item.title }}</a>
+                    <p>{{ item.snippet }}</p>
+                    <small>{{ item.source }}</small>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+    </main>
+</body>
+</html>

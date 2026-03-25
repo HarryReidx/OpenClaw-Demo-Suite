@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>04. 联网搜索并生成网页报告</title>
+    <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <p class="eyebrow">04 / Search + Report</p>
+                <h1>让 Agent 用联网内容生成网页报告</h1>
+                <p class="lead">先从互联网上拉取相关资讯，再由大模型整理成结构化摘要，最后保存成可直接展示的网页报告。</p>
+            </div>
+        </section>
+
+        <section class="workspace">
+            <div class="panel">
+                <label for="queryInput">搜索主题</label>
+                <textarea id="queryInput" placeholder="例如：2026 年最新多模态 AI 产品趋势"></textarea>
+                <div class="actions">
+                    <button id="generateButton">搜索并生成网页报告</button>
+                    <span id="status">等待输入</span>
+                </div>
+                <div id="summaryBlock" class="summary-block hidden">
+                    <p id="pathMeta" class="meta"></p>
+                    <div id="skillTags" class="skill-tags"></div>
+                    <div id="activityList" class="activity-list"></div>
+                    <pre id="summaryOutput"></pre>
+                    <a id="openReportLink" target="_blank" rel="noreferrer">在新标签打开网页报告</a>
+                </div>
+            </div>
+            <aside class="panel side-panel">
+                <h2>最近的网页报告</h2>
+                <div id="reportList">
+                    {% for report in reports %}
+                    <article class="report-item">
+                        <a href="{{ report.url }}" target="_blank" rel="noreferrer">{{ report.name }}</a>
+                        <span>{{ report.updated_at }}</span>
+                    </article>
+                    {% endfor %}
+                </div>
+            </aside>
+        </section>
+
+        <section class="preview panel hidden" id="previewPanel">
+            <div class="preview-head">
+                <h2>报告预览</h2>
+                <span>可直接投屏展示</span>
+            </div>
+            <iframe id="previewFrame" title="网页报告预览"></iframe>
+        </section>
+    </main>
+    <div class="global-watermark">Powered By 清云智通 · 武汉研发中心</div>
+    <script src="/static/app.js"></script>
+</body>
+</html>

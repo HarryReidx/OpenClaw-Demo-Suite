@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>06. 上传文档的知识库 RAG</title>
+    <link rel="stylesheet" href="/static/app.css?v=20260324-preview-fix-3" />
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <p class="eyebrow">06 / AI Knowledge Base</p>
+            <h1>上传文档，现场演示什么是 RAG</h1>
+            <p class="lead">先把简单文档放进知识库，再基于文档内容进行问答，展示“检索增强生成”是怎么工作的。</p>
+        </section>
+
+        <section class="grid">
+            <section class="panel">
+                <h2>上传文档</h2>
+                <form id="uploadForm">
+                    <label class="upload-box">
+                        <span>选择 txt / md / docx</span>
+                        <input type="file" id="fileInput" accept=".txt,.md,.docx" />
+                    </label>
+                    <button type="submit">加入知识库</button>
+                </form>
+                <p id="uploadStatus" class="meta">等待上传</p>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head">
+                    <div>
+                        <h2>已上传文档</h2>
+                        <p class="meta">点击任意文档即可打开预览</p>
+                    </div>
+                </div>
+                <div id="docList">
+                    {% for doc in documents %}
+                    <button type="button" class="doc-item" data-doc-id="{{ doc.doc_id }}">
+                        <strong>{{ doc.file_name }}</strong>
+                        <span>{{ doc.chunk_count }} 个知识片段</span>
+                    </button>
+                    {% endfor %}
+                </div>
+            </section>
+        </section>
+
+        <section class="panel">
+            <h2>基于知识库提问</h2>
+            <textarea id="questionInput" placeholder="例如：这份方案里对上线时间是怎么安排的？"></textarea>
+            <div class="actions">
+                <button id="askButton">发送给大模型</button>
+                <span id="askStatus" class="meta">等待提问</span>
+            </div>
+            <pre id="answerOutput">这里会显示基于知识库生成的回答。</pre>
+        </section>
+
+        <section class="panel">
+            <h2>引用片段</h2>
+            <div id="citationList" class="citation-list"></div>
+        </section>
+    </main>
+
+    <section id="previewModal" class="preview-modal" hidden aria-hidden="true">
+        <div id="previewBackdrop" class="preview-backdrop"></div>
+        <article class="preview-card" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+            <div class="preview-head">
+                <div>
+                    <p class="eyebrow preview-eyebrow">Document Preview</p>
+                    <h2 id="previewTitle">文档预览</h2>
+                    <p id="previewMeta" class="meta">点击文档后会显示文件信息。</p>
+                </div>
+                <div class="preview-actions">
+                    <div class="preview-toggle" role="tablist" aria-label="Preview mode">
+                        <button type="button" id="chunkModeButton" class="preview-mode-button active" aria-pressed="true">Chunk</button>
+                        <button type="button" id="mergedModeButton" class="preview-mode-button" aria-pressed="false">Merged</button>
+                    </div>
+                    <button type="button" id="closePreviewButton" class="preview-close" aria-label="Close preview">关闭</button>
+                </div>
+            </div>
+            <div id="docPreview" class="doc-preview">这里会显示已上传文档的预览内容。</div>
+        </article>
+    </section>
+
+    <div class="global-watermark">Powered By 清云智通-武汉研发中心</div>
+    <script src="/static/app.js?v=20260324-preview-fix-3"></script>
+</body>
+</html>

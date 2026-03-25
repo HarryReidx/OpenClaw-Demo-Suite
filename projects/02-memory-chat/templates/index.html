@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>02. 带记忆的多轮对话</title>
+    <link rel="stylesheet" href="/static/app.css?v=20260325a" />
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <div>
+                <p class="eyebrow">02 / Memory Chat</p>
+                <h1>让模型“记住”我们刚才说过什么</h1>
+            </div>
+            <button id="newSessionButton" class="secondary">新建会话</button>
+        </section>
+
+        <section class="memory-bar">
+            <div>
+                <span class="meta-label">当前会话</span>
+                <code id="sessionId">尚未创建</code>
+            </div>
+            <div>
+                <span class="meta-label">演示重点</span>
+                <p>同一会话中的历史消息会被带回大模型，形成“记忆感”。</p>
+            </div>
+        </section>
+
+        <section id="chatPanel" class="chat-panel"></section>
+
+        <section class="composer">
+            <textarea id="messageInput" placeholder="例如：记住我叫 Harry，我们公司下周做 AI 分享。"></textarea>
+            <div class="composer-row">
+                <span id="status">准备就绪</span>
+                <button id="sendButton">发送</button>
+            </div>
+        </section>
+    </main>
+    <div class="global-watermark">Powered By 清云智通 · 武汉研发中心</div>
+    <script src="/static/app.js?v=20260325a"></script>
+</body>
+</html>

@@ -744,6 +744,10 @@ function addOptimisticTurns(text, file) {
         created_at: new Date().toISOString(),
     });
     setMessages(nextMessages);
+    if (plan.skills.includes("技能安装")) {
+        skillsHint.textContent = "检测到技能安装任务，Skills 面板会自动刷新。";
+        window.setTimeout(loadSkills, 1200);
+    }
 }
 
 function appendStreamingDelta(delta) {
@@ -843,7 +847,7 @@ async function postMessage(formData) {
             body: formData,
         });
         await consumeStreamResponse(response);
-        await Promise.all([loadTasks(), loadMemory(), loadEmails()]);
+        await Promise.all([loadTasks(), loadSkills(), loadMemory(), loadEmails()]);
         textInput.value = "";
         syncQuickActionsVisibility();
         fileInput.value = "";

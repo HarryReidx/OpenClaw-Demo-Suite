@@ -37,6 +37,11 @@ class Settings:
     demo_outputs_dir: Path
 
     @property
+    def is_ollama(self) -> bool:
+        base_url = self.qwen_base_url.lower()
+        return "11434" in base_url or "ollama" in base_url
+
+    @property
     def ai_rag_port(self) -> int:
         return self.rag_port
 
@@ -44,13 +49,13 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     settings = Settings(
-        qwen_api_key=os.getenv("QWEN_API_KEY", "").strip(),
+        qwen_api_key=os.getenv("QWEN_API_KEY", "ollama").strip(),
         qwen_base_url=os.getenv(
             "QWEN_BASE_URL",
-            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "http://172.24.0.5:11434/v1",
         ).strip(),
-        qwen_text_model=os.getenv("QWEN_TEXT_MODEL", "qwen-plus").strip(),
-        qwen_vision_model=os.getenv("QWEN_VISION_MODEL", "qwen-vl-plus").strip(),
+        qwen_text_model=os.getenv("QWEN_TEXT_MODEL", "qwen3:8b").strip(),
+        qwen_vision_model=os.getenv("QWEN_VISION_MODEL", "qwen2.5vl:7b").strip(),
         tavily_api_key=os.getenv("TAVILY_API_KEY", "").strip(),
         tavily_base_url=os.getenv("TAVILY_BASE_URL", "https://api.tavily.com").strip().rstrip("/"),
         app_host=os.getenv("APP_HOST", "0.0.0.0").strip(),
@@ -77,5 +82,8 @@ def get_settings() -> Settings:
 
 
 def require_api_key() -> None:
-    if not get_settings().qwen_api_key:
+    settings = get_settings()
+    if settings.is_ollama:
+        return
+    if not settings.qwen_api_key:
         raise RuntimeError("QWEN_API_KEY is missing. Please configure .env first.")

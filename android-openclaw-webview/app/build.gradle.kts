@@ -4,7 +4,7 @@ plugins {
 }
 
 val defaultBaseUrl =
-    (project.findProperty("OPENCLAW_BASE_URL") as String?)?.trim().orEmpty().ifBlank { "http://10.0.2.2:8105" }
+    (project.findProperty("OPENCLAW_BASE_URL") as String?)?.trim().orEmpty().ifBlank { "http://172.24.0.5:8105" }
 
 android {
     namespace = "com.openclaw.mobile"
@@ -14,8 +14,8 @@ android {
         applicationId = "com.openclaw.mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"$defaultBaseUrl\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -23,6 +23,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

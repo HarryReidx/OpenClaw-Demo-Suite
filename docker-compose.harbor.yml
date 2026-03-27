@@ -1,0 +1,144 @@
+services:
+  portal:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-portal:1.0
+    container_name: ai-openclaw-dev-portal
+    restart: unless-stopped
+    environment:
+      APP_TARGET: portal
+      APP_PORT: 8081
+      APP_HOST: 0.0.0.0
+      PORTAL_PORT: 8100
+      BASIC_QA_PORT: 8101
+      MEMORY_CHAT_PORT: 8102
+      FILE_AGENT_PORT: 8103
+      SEARCH_HTML_PORT: 8104
+      MOBILE_OPENCLAW_PORT: 8105
+      AI_NEWS_PUSH_PORT: 8106
+      RAG_PORT: 8107
+      QWEN_API_KEY: ${QWEN_API_KEY:-ollama}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-http://172.24.0.5:11434/v1}
+      QWEN_TEXT_MODEL: ${QWEN_TEXT_MODEL:-qwen3:8b}
+      QWEN_VISION_MODEL: ${QWEN_VISION_MODEL:-qwen2.5vl:7b}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      TAVILY_BASE_URL: ${TAVILY_BASE_URL:-https://api.tavily.com}
+      WECHAT_WEBHOOK_URL: ${WECHAT_WEBHOOK_URL}
+      CODEX_HOME: /app/.codex
+    ports:
+      - "8100:8081"
+    volumes:
+      - ./runtime/portal/codex:/app/.codex
+
+  app01:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-01:1.0
+    container_name: ai-openclaw-dev-01
+    restart: unless-stopped
+    environment: &common-env
+      APP_PORT: 8081
+      APP_HOST: 0.0.0.0
+      PORTAL_PORT: 8100
+      BASIC_QA_PORT: 8101
+      MEMORY_CHAT_PORT: 8102
+      FILE_AGENT_PORT: 8103
+      SEARCH_HTML_PORT: 8104
+      MOBILE_OPENCLAW_PORT: 8105
+      AI_NEWS_PUSH_PORT: 8106
+      RAG_PORT: 8107
+      QWEN_API_KEY: ${QWEN_API_KEY:-ollama}
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-http://172.24.0.5:11434/v1}
+      QWEN_TEXT_MODEL: ${QWEN_TEXT_MODEL:-qwen3:8b}
+      QWEN_VISION_MODEL: ${QWEN_VISION_MODEL:-qwen2.5vl:7b}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      TAVILY_BASE_URL: ${TAVILY_BASE_URL:-https://api.tavily.com}
+      WECHAT_WEBHOOK_URL: ${WECHAT_WEBHOOK_URL}
+      CODEX_HOME: /app/.codex
+      APP_TARGET: "01"
+    ports:
+      - "8101:8081"
+    volumes:
+      - ./runtime/01/data:/app/data
+      - ./runtime/01/demo_outputs:/app/demo_outputs
+      - ./runtime/01/codex:/app/.codex
+
+  app02:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-02:1.0
+    container_name: ai-openclaw-dev-02
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      APP_TARGET: "02"
+    ports:
+      - "8102:8081"
+    volumes:
+      - ./runtime/02/data:/app/data
+      - ./runtime/02/demo_outputs:/app/demo_outputs
+      - ./runtime/02/codex:/app/.codex
+
+  app03:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-03:1.0
+    container_name: ai-openclaw-dev-03
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      APP_TARGET: "03"
+    ports:
+      - "8103:8081"
+    volumes:
+      - ./runtime/03/data:/app/data
+      - ./runtime/03/demo_outputs:/app/demo_outputs
+      - ./runtime/03/codex:/app/.codex
+
+  app04:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-04:1.0
+    container_name: ai-openclaw-dev-04
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      APP_TARGET: "04"
+    ports:
+      - "8104:8081"
+    volumes:
+      - ./runtime/04/data:/app/data
+      - ./runtime/04/demo_outputs:/app/demo_outputs
+      - ./runtime/04/codex:/app/.codex
+
+  app05:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-05:1.0
+    container_name: ai-openclaw-dev-05
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      APP_TARGET: "05"
+    ports:
+      - "8105:8081"
+    volumes:
+      - ./runtime/05/data:/app/data
+      - ./runtime/05/demo_outputs:/app/demo_outputs
+      - ./runtime/05/codex:/app/.codex
+
+  app06:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-06:1.0
+    container_name: ai-openclaw-dev-06
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      APP_TARGET: "06"
+    ports:
+      - "8106:8081"
+    volumes:
+      - ./runtime/06/data:/app/data
+      - ./runtime/06/demo_outputs:/app/demo_outputs
+      - ./runtime/06/codex:/app/.codex
+
+  app07:
+    image: harbor.tsingyun.net/platform/ai-openclaw-dev-07:1.0
+    container_name: ai-openclaw-dev-07
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      APP_TARGET: "07"
+    ports:
+      - "8107:8081"
+    volumes:
+      - ./runtime/07/data:/app/data
+      - ./runtime/07/demo_outputs:/app/demo_outputs
+      - ./runtime/07/codex:/app/.codex

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">小清虾</string>
-    <string name="app_title">小清虾</string>
+    <string name="app_name">&#x1F99E;小清虾</string>
+    <string name="app_title">&#x1F99E;小清虾</string>
     <string name="current_backend">Backend: %1$s</string>
     <string name="configure_backend">Configure URL</string>
     <string name="reload_page">Reload</string>

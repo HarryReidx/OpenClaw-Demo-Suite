@@ -23,7 +23,7 @@ BROWSER_OPEN_TOOL = {
     "type": "function",
     "function": {
         "name": "browser_open_page",
-        "description": "Open a web page in the current browser session and return a page snapshot.",
+        "description": "Open a web page in the current headless browser session and return a page snapshot.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -42,7 +42,7 @@ BROWSER_SNAPSHOT_TOOL = {
     "type": "function",
     "function": {
         "name": "browser_read_page",
-        "description": "Read the current page and return the visible text plus clickable elements.",
+        "description": "Read the current page in the headless browser and return the visible text plus clickable elements.",
         "parameters": {
             "type": "object",
             "properties": {},
@@ -55,7 +55,7 @@ BROWSER_CLICK_TOOL = {
     "type": "function",
     "function": {
         "name": "browser_click",
-        "description": "Click one of the clickable elements returned by browser_read_page using its element_index.",
+        "description": "Click one of the clickable elements returned by browser_read_page using its element_index in the headless browser.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -74,7 +74,7 @@ BROWSER_FILL_LOGIN_TOOL = {
     "type": "function",
     "function": {
         "name": "browser_fill_login",
-        "description": "Fill the visible username and password inputs on a login page.",
+        "description": "Fill the visible username and password inputs on a login page in the headless browser.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -97,7 +97,7 @@ BROWSER_BACK_TOOL = {
     "type": "function",
     "function": {
         "name": "browser_go_back",
-        "description": "Go back to the previous page in the current browser session and return a fresh snapshot.",
+        "description": "Go back to the previous page in the current headless browser session and return a fresh snapshot.",
         "parameters": {
             "type": "object",
             "properties": {},
@@ -321,8 +321,13 @@ def _get_browser_session(session_id: str) -> BrowserSession:
         playwright = sync_playwright().start()
         browser = playwright.chromium.launch(
             executable_path=_browser_executable(),
-            headless=False,
-            args=["--disable-gpu", "--no-first-run", "--disable-dev-shm-usage"],
+            headless=True,
+            args=[
+                "--disable-gpu",
+                "--no-first-run",
+                "--disable-dev-shm-usage",
+                "--disable-background-networking",
+            ],
         )
         context = browser.new_context(ignore_https_errors=True)
         page = context.new_page()

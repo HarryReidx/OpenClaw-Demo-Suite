@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenClaw Demo Portal</title>
+    <title>黄药师AI-深入浅出小龙虾实践</title>
     <link rel="stylesheet" href="/static/site.css" />
 </head>
 <body>
@@ -19,8 +19,13 @@
                 <span class="tag">{{ code }}</span>
                 <h2>{{ title }}</h2>
                 <p>{{ description }}</p>
+                {% if code == "07" %}
+                <a class="button" href="/static/download/%F0%9F%A6%9E%E5%B0%8F%E6%B8%85%E8%99%BE.apk" download="🦞小清虾.apk">下载 APK</a>
+                <small>暂不支持 iPhone 用户</small>
+                {% else %}
                 <a class="button" href="http://{{ host }}:{{ port }}/" target="_blank" rel="noreferrer">打开演示</a>
                 <small>局域网访问地址: http://{{ host }}:{{ port }}/</small>
+                {% endif %}
             </article>
             {% endfor %}
         </section>

@@ -1,0 +1,58 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" rx="32" fill="#F7F4EE"/>
+  <radialGradient id="g1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1450 780) rotate(180) scale(420 420)">
+    <stop stop-color="#F7C9A8"/>
+    <stop offset="1" stop-color="#F7F4EE"/>
+  </radialGradient>
+  <rect width="1600" height="900" rx="32" fill="url(#g1)"/>
+  <text x="120" y="64" fill="#0F766E" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="4">OPENCLAW FOR TSINGYUN</text>
+  <text x="120" y="154" fill="#111318" font-family="Segoe UI, Arial, sans-serif" font-size="76" font-weight="800">从 LLM 问答到 Agent、</text>
+  <text x="120" y="238" fill="#111318" font-family="Segoe UI, Arial, sans-serif" font-size="76" font-weight="800">RAG 与自动化的一套渐</text>
+  <text x="120" y="322" fill="#111318" font-family="Segoe UI, Arial, sans-serif" font-size="76" font-weight="800">进式演示</text>
+  <text x="120" y="392" fill="#374151" font-family="Segoe UI, Arial, sans-serif" font-size="28">这套仓库专门用于公司内部演示，按 01 到 07 依次打开，就能逐步讲清楚 AI 能力、记忆、工具调用、联网搜索、RAG 和综合工作台。</text>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <rect x="120" y="452" width="260" height="238" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="164" cy="496" r="20" fill="#D7F2F0"/><text x="149" y="504" fill="#0F766E" font-size="24" font-weight="800">01</text>
+    <text x="150" y="568" fill="#111318" font-size="34" font-weight="800">最简单 LLM 一问一答</text>
+    <text x="150" y="628" fill="#4B5563" font-size="22">先让大家看到 prompt 到</text>
+    <text x="150" y="660" fill="#4B5563" font-size="22">response 的最基础形态。</text>
+    <rect x="150" y="700" width="132" height="54" rx="27" fill="#111318"/><text x="182" y="734" fill="white" font-size="24" font-weight="700">打开演示</text>
+
+    <rect x="404" y="452" width="260" height="238" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="448" cy="496" r="20" fill="#D7F2F0"/><text x="433" y="504" fill="#0F766E" font-size="24" font-weight="800">02</text>
+    <text x="434" y="568" fill="#111318" font-size="34" font-weight="800">带记忆的多轮对话</text>
+    <text x="434" y="628" fill="#4B5563" font-size="22">让上下文被保留，体验模型</text>
+    <text x="434" y="660" fill="#4B5563" font-size="22">记住前后文后的变化。</text>
+    <rect x="434" y="700" width="132" height="54" rx="27" fill="#111318"/><text x="466" y="734" fill="white" font-size="24" font-weight="700">打开演示</text>
+
+    <rect x="688" y="452" width="260" height="238" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="732" cy="496" r="20" fill="#D7F2F0"/><text x="717" y="504" fill="#0F766E" font-size="24" font-weight="800">03</text>
+    <text x="718" y="548" fill="#111318" font-size="34" font-weight="800">可以新建文件并写文案</text>
+    <text x="718" y="590" fill="#111318" font-size="34" font-weight="800">的 Agent</text>
+    <text x="718" y="650" fill="#4B5563" font-size="22">演示 Agent 调用本地工具执</text>
+    <text x="718" y="682" fill="#4B5563" font-size="22">行写作任务。</text>
+    <rect x="718" y="700" width="132" height="54" rx="27" fill="#111318"/><text x="750" y="734" fill="white" font-size="24" font-weight="700">打开演示</text>
+
+    <rect x="972" y="452" width="260" height="238" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="1016" cy="496" r="20" fill="#D7F2F0"/><text x="1001" y="504" fill="#0F766E" font-size="24" font-weight="800">04</text>
+    <text x="1002" y="568" fill="#111318" font-size="34" font-weight="800">联网搜索并生成网页报告</text>
+    <text x="1002" y="628" fill="#4B5563" font-size="22">让 Agent 先去网上找资料，</text>
+    <text x="1002" y="660" fill="#4B5563" font-size="22">再交付可展示的网页报告。</text>
+    <rect x="1002" y="700" width="132" height="54" rx="27" fill="#111318"/><text x="1034" y="734" fill="white" font-size="24" font-weight="700">打开演示</text>
+
+    <rect x="120" y="714" width="260" height="146" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="164" cy="758" r="20" fill="#D7F2F0"/><text x="149" y="766" fill="#0F766E" font-size="24" font-weight="800">05</text>
+    <text x="150" y="814" fill="#111318" font-size="34" font-weight="800">AI 资讯定时推送</text>
+    <text x="150" y="852" fill="#4B5563" font-size="22">演示企业微信推送与定时刷新。</text>
+
+    <rect x="404" y="714" width="260" height="146" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="448" cy="758" r="20" fill="#D7F2F0"/><text x="433" y="766" fill="#0F766E" font-size="24" font-weight="800">06</text>
+    <text x="434" y="814" fill="#111318" font-size="34" font-weight="800">上传文档的知识库 RAG</text>
+    <text x="434" y="852" fill="#4B5563" font-size="22">上传文档、检索片段，再基于资料回答。</text>
+
+    <rect x="688" y="714" width="260" height="146" rx="28" fill="white" stroke="#E5E7EB"/>
+    <circle cx="732" cy="758" r="20" fill="#D7F2F0"/><text x="717" y="766" fill="#0F766E" font-size="24" font-weight="800">07</text>
+    <text x="718" y="814" fill="#111318" font-size="34" font-weight="800">模拟 OpenClaw 综合工作台</text>
+    <text x="718" y="852" fill="#4B5563" font-size="22">把记忆、联网、RAG 和任务整合起来。</text>
+  </g>
+</svg>

@@ -1,43 +1,45 @@
-# OpenClaw For Tsingyun
+# AI深入浅出小龙虾
 
-面向公司内部演示的多阶段 AI / Agent 示例仓库。
+一套面向公司内部演示的渐进式 AI / Agent Demo 仓库。项目围绕 “从 LLM 问答，到多轮记忆、工具调用、联网搜索、RAG，再到模拟 OpenClaw 综合工作台” 逐步展开，适合作为培训演示、能力讲解和场景化展示的完整样板。
 
-项目统一使用 `Python + FastAPI + Jinja2 + SQLite`，当前包含 portal 和 `01-07` 七个演示模块，并补充了 Android APK、Docker 镜像、Harbor 发布和服务器部署文件。
+![AI深入浅出小龙虾截图](./docs/ai-lobster-preview.svg)
 
-## 模块说明
+## 这套仓库适合做什么
 
-1. `portal`
-   演示总入口，默认端口 `8100`
-2. `projects/01-basic-qa`
-   基础问答，默认端口 `8101`
-3. `projects/02-memory-chat`
-   带会话记忆的多轮对话，默认端口 `8102`
-4. `projects/03-file-agent`
-   Agent 调工具写本地文件，默认端口 `8103`
-5. `projects/04-search-to-html`
-   联网检索并生成报告页，默认端口 `8104`
-6. `projects/05-mobile-openclaw`
-   综合工作台，支持图片理解、RAG、联网搜索、定时任务和无头浏览器操作，默认端口 `8105`
-7. `projects/06-ai-news-push`
-   AI 资讯获取与推送，默认端口 `8106`
-8. `projects/07-ai-rag`
-   文档上传与知识库问答，默认端口 `8107`
+- 向业务或管理同学演示 AI 能力是如何一步步升级的
+- 在一次分享里串起 `LLM`、`Agent`、`RAG`、自动化与综合工作台
+- 作为内部 Demo 底座，继续扩展行业场景、企业知识库和自动化流程
+- 用于现场演示、录屏讲解和培训答疑
 
-## 关键变更
+## 项目结构
 
-- 默认模型接入已切换到 `172.24.0.5` 上的 Ollama
-  - 文本模型：`qwen3:8b`
-  - 视觉模型：`qwen2.5vl:7b`
-- 已提供统一 Docker 镜像和 Harbor 部署编排
-- portal 的 `07` 改为 APK 下载入口，不再从 portal 直接打开网页
-- Android 发布包名称与应用名称统一为 `🦞小清虾`
-- `05` 中涉及网页访问、登录、点击、读取页面内容的任务，统一走无头浏览器执行
-- 针对“基模 / 模型 / 厂商 / 供应商”等问题，统一通过系统提示引导自然回复：
-  - 本系统由清云智通武汉研发中心设计、研发并提供
+- `portal`
+  演示总入口，默认端口 `8100`
+- `projects/01-basic-qa`
+  最基础的 LLM 一问一答，默认端口 `8101`
+- `projects/02-memory-chat`
+  带上下文记忆的多轮对话，默认端口 `8102`
+- `projects/03-file-agent`
+  调本地工具写文件的 Agent，默认端口 `8103`
+- `projects/04-search-to-html`
+  联网搜索并生成网页报告，默认端口 `8104`
+- `projects/05-mobile-openclaw`
+  模拟综合工作台，集成看图、联网、记忆与任务处理，默认端口 `8105`
+- `projects/06-ai-news-push`
+  AI 资讯获取与推送，默认端口 `8106`
+- `projects/07-ai-rag`
+  文档上传与知识库问答，默认端口 `8107`
+
+## 技术栈
+
+- Python
+- FastAPI
+- Jinja2
+- SQLite
 
 ## 本地启动
 
-### Python 服务
+### 启动全部服务
 
 ```powershell
 .\launch_all.ps1
@@ -45,8 +47,8 @@
 
 默认访问地址：
 
-- portal: `http://127.0.0.1:8000/`
-- 局域网访问时，将 `127.0.0.1` 替换成实际 IP
+- Portal: `http://127.0.0.1:8000/`
+- 局域网访问时，将 `127.0.0.1` 替换为实际 IP
 
 ### Android APK
 
@@ -61,10 +63,10 @@ cd D:\1-workspace\6-ai\openclaw-dev\android-openclaw-webview
 D:\3-env\gradle-8.5\bin\gradle.bat --no-daemon assembleRelease -POPENCLAW_BASE_URL=http://172.24.0.5:8105
 ```
 
-APK 输出：
+APK 输出位置：
 
 - `android-openclaw-webview/app/build/outputs/apk/release/app-release.apk`
-- portal 下载文件：`portal/static/download/🦞小清虾.apk`
+- `portal/static/download/🦞小清虾.apk`
 
 ## Docker 与 Harbor
 
@@ -76,18 +78,7 @@ APK 输出：
 - `docker-compose.harbor.yml`
 - `harbor.env.example`
 
-### 镜像命名
-
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-portal:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-01:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-02:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-03:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-04:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-05:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-06:1.0`
-- `harbor.tsingyun.net/platform/ai-openclaw-dev-07:1.0`
-
-### 服务器端口规划
+### 服务端口
 
 - `8100` -> portal
 - `8101` -> 01
@@ -98,14 +89,7 @@ APK 输出：
 - `8106` -> 06
 - `8107` -> 07
 
-### 服务器部署
-
-将以下文件放到服务器部署目录：
-
-- `docker-compose.harbor.yml`
-- `.env`（可由 `harbor.env.example` 复制）
-
-示例命令：
+### 部署示例
 
 ```bash
 docker login harbor.tsingyun.net -u admin
@@ -113,26 +97,8 @@ docker compose --env-file .env -f docker-compose.harbor.yml pull
 docker compose --env-file .env -f docker-compose.harbor.yml up -d
 ```
 
-## 重要说明
+## 演示建议
 
-- `07` 在 portal 中只提供 APK 下载入口
-- portal 中 `07` 已标注“暂不支持 iPhone 用户”
-- 如果需要重新发布 APK，建议先打包再覆盖 `portal/static/download/🦞小清虾.apk`
-- 如果需要重新发布镜像，重新 `docker build` 并推送 Harbor 即可
-
-## 共享基础能力
-
-- `shared/config.py`
-  环境变量和目录配置
-- `shared/qwen_client.py`
-  文本、视觉、工具调用封装
-- `shared/browser.py`
-  无头浏览器访问、登录和页面读取
-- `shared/db.py`
-  SQLite 持久化
-- `shared/search.py`
-  联网搜索
-- `shared/news.py`
-  AI 新闻聚合与推送
-- `shared/rag.py`
-  简单知识库索引与检索
+- 按 `01 -> 07` 的顺序讲，最容易让听众理解能力递进
+- 先讲“能力边界”，再讲“场景价值”，现场效果会更好
+- 如果做对外或高层汇报，建议优先保留 `portal`、`04`、`05`、`07`

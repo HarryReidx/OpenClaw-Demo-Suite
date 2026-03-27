@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenClaw Workbench</string>
+    <string name="menu_refresh">刷新</string>
+    <string name="menu_server">设置服务地址</string>
+    <string name="menu_reset">重置服务地址</string>
+    <string name="server_dialog_title">连接 OpenClaw 服务</string>
+    <string name="server_dialog_message">请输入可访问 `05-mobile-openclaw` 服务的完整地址。真机通常使用电脑局域网 IP，例如 `http://192.168.1.20:8105/`；模拟器可用默认地址。</string>
+    <string name="server_dialog_confirm">保存并连接</string>
+    <string name="server_dialog_default">使用默认地址</string>
+    <string name="server_invalid_title">地址无效</string>
+    <string name="server_invalid_message">请输入以 `http://` 或 `https://` 开头，并且包含主机名或 IP 的完整地址。</string>
+    <string name="file_chooser_title">选择文件</string>
+    <string name="file_chooser_unavailable">当前设备无法打开文件选择器</string>
+    <string name="external_open_failed">无法打开外部链接</string>
+</resources>

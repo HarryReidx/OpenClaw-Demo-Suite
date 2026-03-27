@@ -779,13 +779,35 @@ function parseSseEvent(rawEvent) {
     };
 }
 
+function supportsStreamingResponse() {
+    return Boolean(
+        window.fetch &&
+        window.ReadableStream &&
+        typeof TextDecoder !== "undefined"
+    );
+}
+
+function createMessageFormData(text, file) {
+    const formData = new FormData();
+    formData.append("session_id", sessionId);
+    formData.append("text", text);
+    if (file) {
+        formData.append("image", file);
+    }
+    return formData;
+}
+
 async function consumeStreamResponse(response) {
     if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || "请求失败");
+        throw new Error(data.detail || "Request failed");
+    }
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("text/event-stream")) {
+        throw new Error("Streaming response unavailable");
     }
     if (!response.body) {
-        throw new Error("当前浏览器不支持流式读取");
+        throw new Error("Streaming not supported in current browser");
     }
 
     const reader = response.body.getReader();
@@ -831,6 +853,18 @@ async function consumeStreamResponse(response) {
     }
 }
 
+async function postMessageNonStreaming(formData) {
+    const response = await fetch("/api/message", {
+        method: "POST",
+        body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(data.detail || "Request failed");
+    }
+    setMessages(data.messages || currentMessages);
+}
+
 async function postMessage(formData) {
     sendButton.disabled = true;
     sendButton.textContent = "发送中...";
@@ -842,11 +876,19 @@ async function postMessage(formData) {
     isStreamingReply = true;
 
     try {
-        const response = await fetch("/api/message-stream", {
-            method: "POST",
-            body: formData,
-        });
-        await consumeStreamResponse(response);
+        if (supportsStreamingResponse()) {
+            try {
+                const response = await fetch("/api/message-stream", {
+                    method: "POST",
+                    body: formData,
+                });
+                await consumeStreamResponse(response);
+            } catch (error) {
+                await postMessageNonStreaming(createMessageFormData(text, file));
+            }
+        } else {
+            await postMessageNonStreaming(createMessageFormData(text, file));
+        }
         await Promise.all([loadTasks(), loadSkills(), loadMemory(), loadEmails()]);
         textInput.value = "";
         syncQuickActionsVisibility();
@@ -916,12 +958,7 @@ form.addEventListener("submit", (event) => {
         fileHint.textContent = "请输入消息或上传图片。";
         return;
     }
-    const formData = new FormData();
-    formData.append("session_id", sessionId);
-    formData.append("text", text);
-    if (file) {
-        formData.append("image", file);
-    }
+    const formData = createMessageFormData(text, file);
     postMessage(formData);
 });
 

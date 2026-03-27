@@ -561,7 +561,7 @@ body {
     border: 1px solid var(--line);
     border-radius: 20px;
     background: white;
-    padding: 8px;
+    padding: 6px 8px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -569,9 +569,9 @@ body {
 
 textarea {
     width: 100%;
-    min-height: 108px;
+    min-height: 88px;
     border: none;
-    padding: 8px 8px 4px;
+    padding: 6px 8px 2px;
     font: inherit;
     resize: none;
     background: transparent;
